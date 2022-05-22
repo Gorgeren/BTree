@@ -1,8 +1,9 @@
 ﻿#include <vector>
 #include <iostream>
 #include <queue>
+#include <string>
 
-#define T 3 // характерестическое число Б дерева
+#define T 2 // характерестическое число Б дерева
 class Key {
 public:
     unsigned long long key;
@@ -48,6 +49,7 @@ private:
     Key* getMin(Node* ptr);
     Key* getMax(Node* ptr);
     Node* searchPrivate(Node* currentNode, int& index, Node* parent, unsigned long long key);
+    void mergeNodes(Node* left, Node* right, Node* parent, int index);
 
 public:
     BTree() : root(nullptr), t(T) {};
@@ -212,12 +214,83 @@ std::string BTree::search(unsigned long long key) {
     return data;
 }
 void BTree::erase(unsigned long long key) {
-
+    int index;
+    Node* parent = nullptr;
+    Node* tmp = searchPrivate(root, index, parent, key);
+    if (tmp == nullptr) { // в дереве нет такого ключа
+        std::cout << "NoSuchWord\n";
+        return;
+    }
+    else if (tmp == root && tmp->leaf) { // если ключ в корне и он лист => в нем может хранится от 1 до 2*t-1 ключей
+        delete tmp->keys[index];
+        tmp->keys.erase(tmp->keys.begin() + index);
+        if (tmp->keys.size() == 0) {
+            delete root;
+            root = nullptr;
+        }
+    } else if (tmp->leaf) { // если ключ находится в листе
+        if (tmp->keys.size() > t - 1) {
+            delete tmp->keys[index];
+            tmp->keys.erase(tmp->keys.begin() + index);
+        }
+        else {
+            int parentindex;
+            binarySearch(parent->keys, parentindex, key);
+            bool left = (parentindex > 0);
+            bool right = (parentindex < parent->ptrs.size() - 1);
+            int countleft = -1, countright = -1;
+            if (left) {
+                countleft = parent->ptrs[parentindex - 1]->keys.size();
+            }
+            if (right) {
+                countright = parent->ptrs[parentindex + 1]->keys.size();
+            }
+            if (countleft > t - 1 && countleft >= countright) {
+                tmp->keys.insert(tmp->keys.begin(), parent->keys[parentindex - 1]);
+                parent->keys[parentindex - 1] = getMax(parent->ptrs[parentindex - 1]);
+                delete tmp->keys[index + 1];
+                tmp->keys.erase(tmp->keys.begin() + index + 1);
+            }
+            else if (countright > t - 1 && countright >= countleft) {
+                tmp->keys.push_back(parent->keys[parentindex]);
+                parent->keys[parentindex] = getMin(parent->ptrs[parentindex + 1]);
+                delete tmp->keys[index];
+                tmp->keys.erase(tmp->keys.begin() + index);
+            }
+            else if (left) {
+                mergeNodes(parent->ptrs[parentindex - 1], tmp, parent, parentindex - 1);
+            }
+            else if (right) {
+                mergeNodes(tmp,parent->ptrs[parentindex + 1], parent, parentindex);
+            }
+        }
+        std::cout << "Ok\n";
+    }
+    else {
+        std::cout << "It is not least\n";
+    }
+    
+}
+void BTree::mergeNodes(Node* left, Node* right, Node* parent, int index) {
+    Node* newNode = createNode();
+    newNode->leaf = left->leaf;
+    newNode->keys = left->keys;
+    newNode->keys.push_back(parent->keys[index]);
+    std::copy(left->keys.begin(), left->keys.end(), inserter(newNode->keys, newNode->keys.end()));
+    parent->keys.erase(parent->keys.begin() + index);
+    parent->ptrs[index] = newNode;
+    parent->ptrs.erase(parent->ptrs.begin() + index + 1);
+    if (!left->leaf && !right->leaf) {
+        newNode->ptrs = left->ptrs;
+        std::copy(right->ptrs.begin(), right->ptrs.end(), inserter(newNode->ptrs, newNode->ptrs.end()));
+    }
+    free(left);
+    free(right);
 }
 int main()
 {
     BTree tree;
-    int n = 230;            // 0       1          2          3      4        5         6        7      8       9
+    int n = 23;            // 0       1          2          3      4        5         6        7      8       9
     std::string arr[10] = { "Key", "What", "Abracadabra", "Hmm", "John", "Artur", "Amazing", "Car", "Cow", "Apple" };
     for (int i = 0; i < n; i++) {
         unsigned long long key = 0;
@@ -228,16 +301,28 @@ int main()
     tree.print();
     std::string todo;
     while ((std::cin >> todo)) {
-        if (todo == "Search") {
-            std::cout << "Enter Key: ";
-            unsigned long long key;
+        if (todo == "+") {
+            unsigned long long key1;
+            std::cin >> todo >> key1;
+            tree.insert(key1, todo);
+        }
+        else if (todo == "-") {
+            unsigned long long key1;
+            std::cin >> key1;
+            tree.erase(key1);
+        }
+        else if (todo == "p") {
+            tree.print();
+        }
+        else {
+            unsigned long long key = std::stoi(todo);
             std::cin >> key;
             todo = tree.search(key);
             std::cout << todo << '\n';
         }
-        else {
+        /*else {
             std::cout << "Wrong command\n";
-        }
+        }*/
     }
 }
 
