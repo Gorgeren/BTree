@@ -50,7 +50,6 @@ private:
     Key* getMin(Node* ptr);
     Key* getMax(Node* ptr);
     Node* mergeNodes(Node* left, Node* right, Node* parent, int index);
-
 public:
     BTree() : root(nullptr), t(T) {};
 };
@@ -294,12 +293,13 @@ Node* BTree::mergeNodes(Node* left, Node* right, Node* parent, int index) {
     free(right);
     return newNode;
 }
+
 int main()
 {
     BTree tree;
     int n = 23;            // 0       1          2          3      4        5         6        7      8       9
     std::string arr[10] = { "Key", "What", "Abracadabra", "Hmm", "John", "Artur", "Amazing", "Car", "Cow", "Apple" };
-    for (int i = 10; i < n; i++) {
+    for (int i = n; i > 0; i--) {
         unsigned long long key = 0;
         //std::cout << "Enter key" << std::endl;
         //std::cin >> key;
@@ -313,7 +313,6 @@ int main()
     //tree.print();
     //tree.erase(20);
     //tree.print();
-
     std::string todo;
     while ((std::cin >> todo)) {
         if (todo == "+") {
@@ -337,5 +336,3 @@ int main()
         }
     }
 }
-
-
