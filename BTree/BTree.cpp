@@ -261,57 +261,52 @@ bool BTree::erase(Node* ptr, unsigned long long key, bool del) {
             bool right = index < ptr->ptrs.size() - 1;
             int countleft = -1;
             int countright = -1;
+            Node* leftBrother = nullptr;
+            Node* rightBrother = nullptr;
+            Node* son = ptr->ptrs[index];
             if (left) {
-                countleft = ptr->ptrs[index]->keys.size();
+                leftBrother = ptr->ptrs[index - 1];
+                countleft = (int)leftBrother->keys.size();
             }
             if (right) {
-                countright = ptr->ptrs[index + 1]->keys.size();
+                rightBrother = ptr->ptrs[index + 1];
+                countright = (int)rightBrother->keys.size();
             }
             if (countleft > t - 1 && countleft >= countright) {
-                ptr->ptrs[index]->keys.push_back(ptr->keys[index]);
-                ptr->keys[index] = ptr->ptrs[index + 1]->keys[0];
-                ptr->ptrs[index]->ptrs.push_back(ptr->ptrs[index + 1]->ptrs[0]);
-                ptr->ptrs[index + 1]->ptrs.erase(ptr->ptrs[index + 1]->ptrs.begin());
-                ptr->ptrs[index + 1]->keys.erase(ptr->ptrs[index + 1]->keys.begin());
-                return erase(ptr->ptrs[index], key, 1);
+                if (leftBrother == nullptr) exit(1);
+                son->keys.insert(son->keys.begin(), ptr->keys[index]);
+                ptr->keys[index] = leftBrother->keys[leftBrother->keys.size() - 1];
+                leftBrother->keys.erase(leftBrother->keys.begin() + leftBrother->keys.size() - 1);
+                if (son->leaf) {
+                    son->ptrs.insert(son->ptrs.begin(), leftBrother->ptrs[leftBrother->keys.size() - 1]);
+                    leftBrother->ptrs.erase(leftBrother->ptrs.begin() + leftBrother->ptrs.size() - 1);
+                }
+                return erase(son, key, 1);
             }
             else if (countright > t - 1 && countright >= countleft) {
-                ptr->ptrs[index + 1]->keys.insert(ptr->ptrs[index + 1]->keys.begin(), ptr->keys[index]);
-                ptr->keys[index] = ptr->ptrs[index]->keys[ptr->ptrs[index]->keys.size() - 1];
-                ptr->ptrs[index + 1]->ptrs.insert(ptr->ptrs[index + 1]->ptrs.begin(), ptr->ptrs[index]->ptrs[ptr->ptrs[index]->ptrs.size() - 1]);
-                ptr->ptrs[index]->ptrs.erase(ptr->ptrs[index]->ptrs.begin() + ptr->ptrs[index]->ptrs.size());
-                ptr->ptrs[index]->keys.erase(ptr->ptrs[index]->keys.begin() + ptr->ptrs[index]->keys.size());
-                return erase(ptr->ptrs[index + 1], key, 1);
+                if (rightBrother == nullptr) exit(1);
+                son->keys.push_back(ptr->keys[index]);
+                ptr->keys[index] = rightBrother->keys[0];
+                rightBrother->keys.erase(rightBrother->keys.begin());
+                if (!son->leaf) {
+                    son->ptrs.push_back(rightBrother->ptrs[0]);
+                    rightBrother->ptrs.erase(rightBrother->ptrs.begin());
+                }
+                return erase(son, key, 1);
             }
             else if (left) {
-                mergeNodes(ptr, ptr->ptrs[index - 1], ptr->ptrs[index], index);
-                erase(ptr->ptrs[index - 1], key, 1);
+                mergeNodes(ptr, leftBrother, son, index - 1);
+                return erase(leftBrother, key, 1);
             }
             else {
-                mergeNodes(ptr, ptr->ptrs[index], ptr->ptrs[index + 1], index);
-                erase(ptr->ptrs[index], key, 1);
+                mergeNodes(ptr, son, rightBrother, index);
+                return erase(son, key, 1);
             }
         }
         else return erase(ptr->ptrs[index], key, 1);
     }
 }
-//Node* BTree::mergeNodes(Node* parent, Node* left, Node* right, int index) {
-//    Node* newNode = createNode();
-//    newNode->leaf = left->leaf;
-//    newNode->keys = left->keys;
-//    newNode->keys.push_back(parent->keys[index]);
-//    std::copy(right->keys.begin(), right->keys.end(), inserter(newNode->keys, newNode->keys.end()));
-//    parent->keys.erase(parent->keys.begin() + index);
-//    parent->ptrs[index] = newNode;
-//    parent->ptrs.erase(parent->ptrs.begin() + index + 1);
-//    if (!left->leaf && !right->leaf) {
-//        newNode->ptrs = left->ptrs;
-//        std::copy(right->ptrs.begin(), right->ptrs.end(), inserter(newNode->ptrs, newNode->ptrs.end()));
-//    }
-//    free(left);
-//    free(right);
-//    return newNode;
-//}
+
 Node* BTree::mergeNodes(Node* parent, Node* left, Node* right, int index) {
     left->keys.push_back(parent->keys[index]);
     parent->keys.erase(parent->keys.begin() + index);
@@ -323,8 +318,12 @@ Node* BTree::mergeNodes(Node* parent, Node* left, Node* right, int index) {
     }
     //free(right);
     if (root->keys.size() == 0) {
-        //free(root->ptrs[0]);
         root = left;
+        if (root->keys.size() == 0) {
+            delete root;
+            root = nullptr;
+            //free(parent->ptrs[0]);
+        }
     }
     return nullptr;
 }
@@ -404,12 +403,12 @@ std::string BTree::search(unsigned long long key) {
 
 int main()
 {
-    srand(time(NULL));
+    srand((unsigned int)time(NULL));
     std::string todo;
     BTree tree; // 63
     int n = 20;        // 0       1          2          3      4        5         6        7      8       9
     std::string arr[10] = { "Key", "What", "Abracadabra", "Hmm", "John", "Artur", "Amazing", "Car", "Cow", "Apple" };
-    for (unsigned long long i = 0; i < n; i++) {
+    for (unsigned long long i = 1; i < n; i++) {
         //unsigned long long key = 0;
         //std::cout << "Enter key" << std::endl;
         //std::cin >> key;
@@ -417,6 +416,8 @@ int main()
         tree.insert(i, arr[i % 10]);
 
     }
+    tree.print();
+    tree.erase(0);
     tree.print();
     for (unsigned long long i = 0; i < n; i++) {
         std::cout << i << std::endl;
