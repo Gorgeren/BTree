@@ -9,6 +9,7 @@ public:
     unsigned long long key;
     std::string data;
     Key(unsigned long long key, std::string data) : key(key), data(data) {};
+    ~Key() = default;
 };
 class Node {
 public:
@@ -36,10 +37,11 @@ class BTree {
     Node* root;
 public:
     void insert(unsigned long long key, std::string data);
-    void erase(unsigned long long key);
     void print();
+    bool erase(unsigned long long key);
     std::string search(unsigned long long key);
 private:
+    bool erase(Node *ptr, unsigned long long key, bool del);
     Node* searchPrivate(Node* currentNode, int& index, Node** parent, unsigned long long key);
     void insertPrivate(Node* ptr, Key* newKey);
     void insertPrivate(Key* newKey);
@@ -49,7 +51,7 @@ private:
     void splitChild(Node* ptr, int i);
     Key* getMin(Node* ptr);
     Key* getMax(Node* ptr);
-    Node* mergeNodes(Node* left, Node* right, Node* parent, int index);
+    Node* mergeNodes(Node* parent, Node* left, Node* right, int index);
 public:
     BTree() : root(nullptr), t(T) {};
 };
@@ -78,11 +80,20 @@ Key* BTree::createKey(unsigned long long key, std::string data) {
     return new Key(key, data);
 }
 void BTree::insert(unsigned long long key, std::string data) {
-    Key* newKey = createKey(key, data);
-    if (root == nullptr) {
-        root = createNode(newKey);
-    } else {
-        insertPrivate(newKey);
+    std::string exists = this->search(key);
+    if (exists != "NoSuchWord") {
+        std::cout << "Exist\n";
+        return;
+    }
+    else {
+        Key* newKey = createKey(key, data);
+        if (root == nullptr) {
+            root = createNode(newKey);
+        }
+        else {
+            insertPrivate(newKey);
+        }
+        std::cout << "OK\n";
     }
 }
 void BTree::insertPrivate(Key* newKey) {
@@ -205,107 +216,224 @@ Node* BTree::searchPrivate(Node* currentNode, int &index, Node** parent, unsigne
         }
     }
 }
-void BTree::erase(unsigned long long key) {
+Key* findMax(Node* ptr) {
+    if (ptr->leaf) return ptr->keys[ptr->keys.size() - 1];
+    else return findMax(ptr->ptrs[ptr->ptrs.size() - 1]);
+}
+Key* findMin(Node* ptr) {
+    if (ptr->leaf) return ptr->keys[0];
+    else return findMin(ptr->ptrs[0]);
+}
+bool BTree::erase(unsigned long long key) {
+    return (erase(root, key, 1)) ? true : false;
+}
+bool BTree::erase(Node* ptr, unsigned long long key, bool del) {
     int index;
-    Node* parent;
-    Node* tmp = searchPrivate(root, index, &parent, key);
-    if (tmp == nullptr) { // в дереве нет такого ключа
-        std::cout << "NoSuchWord\n";
-        return;
+    bool exist = binarySearch(ptr->keys, index, key);
+    if (ptr->leaf) {
+        if (!exist) return false;
+        //del ? delete ptr->keys[index] : free(ptr->keys[index]);
+        if (del) delete ptr->keys[index];
+        ptr->keys.erase(ptr->keys.begin() + index);
+        return true;
     }
-    else if (tmp == root && tmp->leaf) { // если ключ в корне и он лист => в нем может хранится от 1 до 2*t-1 ключей
-        delete tmp->keys[index];
-        tmp->keys.erase(tmp->keys.begin() + index);
-        if (tmp->keys.size() == 0) {
-            delete root;
-            root = nullptr;
+    else if(exist) {
+        if (ptr->ptrs[index]->keys.size() > t - 1) {
+            Key* tmpKey = findMax(ptr->ptrs[index]);
+            delete ptr->keys[index];
+            ptr->keys[index] = tmpKey;
+            return erase(ptr->ptrs[index], tmpKey->key, 0);
         }
-    } else if (tmp->leaf) { // если ключ находится в листе
-        if (tmp->keys.size() > t - 1) {
-            delete tmp->keys[index];
-            tmp->keys.erase(tmp->keys.begin() + index);
+        else if(ptr->ptrs[index + 1]->keys.size() > t - 1) {
+            Key* tmpKey = findMin(ptr->ptrs[index + 1]);
+            delete ptr->keys[index];
+            ptr->keys[index] = tmpKey;
+            return erase(ptr->ptrs[index + 1], tmpKey->key, 0);
         }
         else {
-            int parentindex;
-            binarySearch(parent->keys, parentindex, key);
-            bool left = (parentindex > 0);
-            bool right = (parentindex < parent->ptrs.size() - 1);
-            int countleft = -1, countright = -1;
-            if (left) {
-                countleft = parent->ptrs[parentindex - 1]->keys.size();
-            }
-            if (right) {
-                countright = parent->ptrs[parentindex + 1]->keys.size();
-            }
-            if (countleft > t - 1 && countleft >= countright) {
-                tmp->keys.insert(tmp->keys.begin(), parent->keys[parentindex - 1]);
-                parent->keys[parentindex - 1] = getMax(parent->ptrs[parentindex - 1]);
-                delete tmp->keys[index + 1];
-                tmp->keys.erase(tmp->keys.begin() + index + 1);
-            }
-            else if (countright > t - 1 && countright >= countleft) {
-                tmp->keys.push_back(parent->keys[parentindex]);
-                parent->keys[parentindex] = getMin(parent->ptrs[parentindex + 1]);
-                delete tmp->keys[index];
-                tmp->keys.erase(tmp->keys.begin() + index);
-            }
-            else if (left) {
-                tmp = mergeNodes(parent->ptrs[parentindex - 1], tmp, parent, parentindex - 1);
-                binarySearch(tmp->keys, index, key);
-                delete tmp->keys[index];
-                tmp->keys.erase(tmp->keys.begin() + index);
-            }
-            else if (right) {
-                tmp = mergeNodes(tmp,parent->ptrs[parentindex + 1], parent, parentindex);
-                binarySearch(tmp->keys, index, key);
-                delete tmp->keys[index];
-                tmp->keys.erase(tmp->keys.begin() + index);
-            }
+            mergeNodes(ptr, ptr->ptrs[index], ptr->ptrs[index + 1], index);
+            return erase(ptr->ptrs[index], key, 1);
         }
-        std::cout << "Ok\n";
     }
     else {
-        std::cout << "It is not least\n";
+        if (ptr->ptrs[index]->keys.size() < t) {
+            bool left = index > 0;
+            bool right = index < ptr->ptrs.size() - 1;
+            int countleft = -1;
+            int countright = -1;
+            if (left) {
+                countleft = ptr->ptrs[index]->keys.size();
+            }
+            if (right) {
+                countright = ptr->ptrs[index + 1]->keys.size();
+            }
+            if (countleft > t - 1 && countleft >= countright) {
+                ptr->ptrs[index]->keys.push_back(ptr->keys[index]);
+                ptr->keys[index] = ptr->ptrs[index + 1]->keys[0];
+                ptr->ptrs[index]->ptrs.push_back(ptr->ptrs[index + 1]->ptrs[0]);
+                ptr->ptrs[index + 1]->ptrs.erase(ptr->ptrs[index + 1]->ptrs.begin());
+                ptr->ptrs[index + 1]->keys.erase(ptr->ptrs[index + 1]->keys.begin());
+                return erase(ptr->ptrs[index], key, 1);
+            }
+            else if (countright > t - 1 && countright >= countleft) {
+                ptr->ptrs[index + 1]->keys.insert(ptr->ptrs[index + 1]->keys.begin(), ptr->keys[index]);
+                ptr->keys[index] = ptr->ptrs[index]->keys[ptr->ptrs[index]->keys.size() - 1];
+                ptr->ptrs[index + 1]->ptrs.insert(ptr->ptrs[index + 1]->ptrs.begin(), ptr->ptrs[index]->ptrs[ptr->ptrs[index]->ptrs.size() - 1]);
+                ptr->ptrs[index]->ptrs.erase(ptr->ptrs[index]->ptrs.begin() + ptr->ptrs[index]->ptrs.size());
+                ptr->ptrs[index]->keys.erase(ptr->ptrs[index]->keys.begin() + ptr->ptrs[index]->keys.size());
+                return erase(ptr->ptrs[index + 1], key, 1);
+            }
+            else if (left) {
+                mergeNodes(ptr, ptr->ptrs[index - 1], ptr->ptrs[index], index);
+                erase(ptr->ptrs[index - 1], key, 1);
+            }
+            else {
+                mergeNodes(ptr, ptr->ptrs[index], ptr->ptrs[index + 1], index);
+                erase(ptr->ptrs[index], key, 1);
+            }
+        }
+        else return erase(ptr->ptrs[index], key, 1);
     }
-    
 }
+//Node* BTree::mergeNodes(Node* parent, Node* left, Node* right, int index) {
+//    Node* newNode = createNode();
+//    newNode->leaf = left->leaf;
+//    newNode->keys = left->keys;
+//    newNode->keys.push_back(parent->keys[index]);
+//    std::copy(right->keys.begin(), right->keys.end(), inserter(newNode->keys, newNode->keys.end()));
+//    parent->keys.erase(parent->keys.begin() + index);
+//    parent->ptrs[index] = newNode;
+//    parent->ptrs.erase(parent->ptrs.begin() + index + 1);
+//    if (!left->leaf && !right->leaf) {
+//        newNode->ptrs = left->ptrs;
+//        std::copy(right->ptrs.begin(), right->ptrs.end(), inserter(newNode->ptrs, newNode->ptrs.end()));
+//    }
+//    free(left);
+//    free(right);
+//    return newNode;
+//}
+Node* BTree::mergeNodes(Node* parent, Node* left, Node* right, int index) {
+    left->keys.push_back(parent->keys[index]);
+    parent->keys.erase(parent->keys.begin() + index);
+    std::copy(right->keys.begin(), right->keys.end(), inserter(left->keys, left->keys.end()));
+    //free(parent->ptrs[index + 1]);
+    parent->ptrs.erase(parent->ptrs.begin() + index + 1);
+    if (!left->leaf) {
+        std::copy(right->ptrs.begin(), right->ptrs.end(), inserter(left->ptrs, left->ptrs.end()));
+    }
+    //free(right);
+    if (root->keys.size() == 0) {
+        //free(root->ptrs[0]);
+        root = left;
+    }
+    return nullptr;
+}
+//void BTree::erase(unsigned long long key) {
+//    int index;
+//    Node* parent;
+//    Node* tmp = searchPrivate(root, index, &parent, key);
+//    if (tmp == nullptr) { // в дереве нет такого ключа
+//        std::cout << "NoSuchWord\n";
+//        return;
+//    }
+//    else if (tmp == root && tmp->leaf) { // если ключ в корне и он лист => в нем может хранится от 1 до 2*t-1 ключей
+//        delete tmp->keys[index];
+//        tmp->keys.erase(tmp->keys.begin() + index);
+//        if (tmp->keys.size() == 0) {
+//            delete root;
+//            root = nullptr;
+//        }
+//    } else if (tmp->leaf) { // если ключ находится в листе
+//        if (tmp->keys.size() > t - 1) {
+//            delete tmp->keys[index];
+//            tmp->keys.erase(tmp->keys.begin() + index);
+//        }
+//        else {
+//            int parentindex;
+//            binarySearch(parent->keys, parentindex, key);
+//            bool left = (parentindex > 0);
+//            bool right = (parentindex < parent->ptrs.size() - 1);
+//            int countleft = -1, countright = -1;
+//            if (left) {
+//                countleft = parent->ptrs[parentindex - 1]->keys.size();
+//            }
+//            if (right) {
+//                countright = parent->ptrs[parentindex + 1]->keys.size();
+//            }
+//            if (countleft > t - 1 && countleft >= countright) {
+//                tmp->keys.insert(tmp->keys.begin(), parent->keys[parentindex - 1]);
+//                parent->keys[parentindex - 1] = getMax(parent->ptrs[parentindex - 1]);
+//                delete tmp->keys[index + 1];
+//                tmp->keys.erase(tmp->keys.begin() + index + 1);
+//            }
+//            else if (countright > t - 1 && countright >= countleft) {
+//                tmp->keys.push_back(parent->keys[parentindex]);
+//                parent->keys[parentindex] = getMin(parent->ptrs[parentindex + 1]);
+//                delete tmp->keys[index];
+//                tmp->keys.erase(tmp->keys.begin() + index);
+//            }
+//            else if (left) {
+//                tmp = mergeNodes(parent->ptrs[parentindex - 1], tmp, parent, parentindex - 1);
+//                binarySearch(tmp->keys, index, key);
+//                delete tmp->keys[index];
+//                tmp->keys.erase(tmp->keys.begin() + index);
+//            }
+//            else if (right) {
+//                tmp = mergeNodes(tmp,parent->ptrs[parentindex + 1], parent, parentindex);
+//                binarySearch(tmp->keys, index, key);
+//                delete tmp->keys[index];
+//                tmp->keys.erase(tmp->keys.begin() + index);
+//            }
+//        }
+//        std::cout << "OK\n";
+//    }
+//    else {
+//        std::cout << "It is not least\n";
+//    }
+//    
+//}
 std::string BTree::search(unsigned long long key) {
+    if (root == nullptr) return "NoSuchWord";
     int index;
     Node* parent = nullptr;
     Node* tmp = searchPrivate(root, index, &parent, key);
-    std::string data = (tmp == nullptr) ? "Not Exists" : tmp->keys[index]->data;
+    std::string data = ((tmp == nullptr) ? "NoSuchWord" : tmp->keys[index]->data);
     return data;
 }
-Node* BTree::mergeNodes(Node* left, Node* right, Node* parent, int index) {
-    Node* newNode = createNode();
-    newNode->leaf = left->leaf;
-    newNode->keys = left->keys;
-    newNode->keys.push_back(parent->keys[index]);
-    std::copy(right->keys.begin(), right->keys.end(), inserter(newNode->keys, newNode->keys.end()));
-    parent->keys.erase(parent->keys.begin() + index);
-    parent->ptrs[index] = newNode;
-    parent->ptrs.erase(parent->ptrs.begin() + index + 1);
-    if (!left->leaf && !right->leaf) {
-        newNode->ptrs = left->ptrs;
-        std::copy(right->ptrs.begin(), right->ptrs.end(), inserter(newNode->ptrs, newNode->ptrs.end()));
-    }
-    free(left);
-    free(right);
-    return newNode;
-}
+
 
 int main()
 {
-    BTree tree;
-    int n = 23;            // 0       1          2          3      4        5         6        7      8       9
+    srand(time(NULL));
+    std::string todo;
+    BTree tree; // 63
+    int n = 20;        // 0       1          2          3      4        5         6        7      8       9
     std::string arr[10] = { "Key", "What", "Abracadabra", "Hmm", "John", "Artur", "Amazing", "Car", "Cow", "Apple" };
-    for (int i = n; i > 0; i--) {
-        unsigned long long key = 0;
+    for (unsigned long long i = 0; i < n; i++) {
+        //unsigned long long key = 0;
         //std::cout << "Enter key" << std::endl;
         //std::cin >> key;
+        //tree.insert(rand() % (n + 100), arr[i % 10]);
         tree.insert(i, arr[i % 10]);
+
     }
     tree.print();
+    for (unsigned long long i = 0; i < n; i++) {
+        std::cout << i << std::endl;
+        tree.erase(i);
+        tree.print();
+    }
+    for (unsigned long long i = 0; i < n; i++) {
+        todo = tree.search(i);
+        if (todo == "NoSuchWord") {
+            std::cout << todo << '\n';
+        }
+        else {
+            std::cout << "OK:" << todo << '\n';
+        }
+    }
+
+    //tree.print();
     ////tree.erase(18);
     ////tree.print();
     //tree.erase(18);
@@ -313,17 +441,16 @@ int main()
     //tree.print();
     //tree.erase(20);
     //tree.print();
-    std::string todo;
     while ((std::cin >> todo)) {
         if (todo == "+") {
             unsigned long long key1;
-            std::cin >> todo >> key1;
-            tree.insert(key1, todo);
+            std::cin >> key1;
+            tree.insert(key1, "key");
         }
         else if (todo == "-") {
             unsigned long long key1;
             std::cin >> key1;
-            tree.erase(key1);
+            std::cout << (tree.erase(key1) ? "OK\n" : "NoSuchWord\n");
         }
         else if (todo == "p") {
             tree.print();
