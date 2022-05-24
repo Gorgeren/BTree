@@ -290,10 +290,10 @@ bool BTree::erase(Node* ptr, unsigned long long key, bool del) {
             }
             if (countleft > t - 1 && countleft >= countright) {
                 if (leftBrother == nullptr) exit(1);
-                son->keys.insert(son->keys.begin(), ptr->keys[index - 1]);
-                ptr->keys[index - 1] = leftBrother->keys[leftBrother->keys.size() - 1];
+                son->keys.insert(son->keys.begin(), ptr->keys[index]);
+                ptr->keys[index] = leftBrother->keys[leftBrother->keys.size() - 1];
                 leftBrother->keys.erase(leftBrother->keys.begin() + leftBrother->keys.size() - 1);
-                if (!son->leaf) {
+                if (son->leaf) {
                     son->ptrs.insert(son->ptrs.begin(), leftBrother->ptrs[leftBrother->ptrs.size() - 1]);
                     leftBrother->ptrs.erase(leftBrother->ptrs.begin() + leftBrother->ptrs.size() - 1);
                 }
