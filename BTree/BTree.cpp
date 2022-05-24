@@ -3,7 +3,7 @@
 #include <queue>
 #include <string>
 
-#define T 200 // характерестическое число Б дерева
+#define T 2 // характерестическое число Б дерева
 class Key {
 public:
     unsigned long long key;
@@ -57,9 +57,13 @@ private:
     Node* mergeNodes(Node* parent, Node* left, Node* right, int index);
 public:
     BTree() : root(nullptr), t(T) {};
-    ~BTree() = default;
+    ~BTree() {
+        delete root;
+        root = nullptr;
+    }
 };
 void BTree::clean() {
+    if (root == nullptr) return;
     delete root;
     root = nullptr;
 }
