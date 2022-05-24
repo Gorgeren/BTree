@@ -3,7 +3,7 @@
 #include <queue>
 #include <string>
 
-#define T 200 // характерестическое число Б дерева
+#define T 2 // характерестическое число Б дерева
 class Key {
 public:
     unsigned long long key;
@@ -36,11 +36,10 @@ class BTree {
     int t;
     Node* root;
 public:
-    bool insert(unsigned long long key, std::string data);
+    void insert(unsigned long long key, std::string data);
     void print();
     bool erase(unsigned long long key);
     std::string search(unsigned long long key);
-    void clean();
 private:
     bool erase(Node* ptr, unsigned long long key, bool del);
     Node* searchPrivate(Node* currentNode, int& index, Node** parent, unsigned long long key);
@@ -52,17 +51,10 @@ private:
     void splitChild(Node* ptr, int i);
     Key* getMin(Node* ptr);
     Key* getMax(Node* ptr);
-    bool binarySearch(std::vector<Key*>& arr, int& index, Key* key);
-    bool binarySearch(std::vector<Key*>& arr, int& index, unsigned long long key);
     Node* mergeNodes(Node* parent, Node* left, Node* right, int index);
 public:
     BTree() : root(nullptr), t(T) {};
-    ~BTree() = default;
 };
-void BTree::clean() {
-    delete root;
-    root = nullptr;
-}
 
 void BTree::splitChild(Node* parent, int i) {
     Node* child = parent->ptrs[i];
@@ -87,10 +79,11 @@ Node* BTree::createNode(Key* key) {
 Key* BTree::createKey(unsigned long long key, std::string data) {
     return new Key(key, data);
 }
-bool BTree::insert(unsigned long long key, std::string data) {
+void BTree::insert(unsigned long long key, std::string data) {
     std::string exists = this->search(key);
     if (exists != "NoSuchWord") {
-        return 0;
+        std::cout << "Exist\n";
+        return;
     }
     else {
         Key* newKey = createKey(key, data);
@@ -100,7 +93,7 @@ bool BTree::insert(unsigned long long key, std::string data) {
         else {
             insertPrivate(newKey);
         }
-        return 1;
+        std::cout << "OK\n";
     }
 }
 void BTree::insertPrivate(Key* newKey) {
@@ -116,7 +109,12 @@ void BTree::insertPrivate(Key* newKey) {
         insertPrivate(root, newKey);
     }
 }
-
+void binarySearch(std::vector<Key*> arr, int& index, Key* key) {
+    index = 0;
+    while (index < arr.size() && key->key > arr[index]->key) {
+        ++index;
+    }
+}
 void BTree::insertPrivate(Node* ptr, Key* newKey) {
     int index;
     if (ptr->leaf) {
@@ -198,63 +196,17 @@ Key* BTree::getMax(Node* ptr) {
         return tmp;
     }
 }
-bool BTree::binarySearch(std::vector<Key*>& arr, int& index, Key* key) {
-    int l = 0;
-    int r = arr.size() - 1;
+bool binarySearch(std::vector<Key*> arr, int& index, unsigned long long key) {
     index = 0;
-    int mid;
-    if (key->key < arr[0]->key) {
-        index = 0;
+    while (index < arr.size() && key > arr[index]->key) {
+        ++index;
+    }
+    if (index == arr.size()) {
         return 0;
     }
-    if (key->key > arr[arr.size() - 1]->key) {
-        index = arr.size();
-        return 0;
+    else {
+        return ((key == arr[index]->key) ? 1 : 0);
     }
-    while (l <= r) {
-        mid = l + (r - l) / 2;
-        if (key->key == arr[mid]->key) {
-            index = mid;
-            return 1;
-        }
-        else if (key->key > arr[mid]->key) {
-            l = ++mid;
-        }
-        else {
-            r = --mid;
-        }
-    }
-    index = l;
-    return 0;
-}
-bool BTree::binarySearch(std::vector<Key*>& arr, int& index, unsigned long long key) {
-    int l = 0;
-    int r = arr.size() - 1;
-    index = 0;
-    int mid;
-    if (key < arr[0]->key) {
-        index = 0;
-        return 0;
-    }
-    if (key > arr[arr.size() - 1]->key) {
-        index = arr.size();
-        return 0;
-    }
-    while (l <= r) {
-        mid = l + (r - l) / 2;
-        if (key == arr[mid]->key) {
-            index = mid;
-            return 1;
-        }
-        else if (key > arr[mid]->key) {
-            l = ++mid;
-        }
-        else {
-            r = --mid;
-        }
-    }
-    index = l;
-    return 0;
 }
 Node* BTree::searchPrivate(Node* currentNode, int& index, Node** parent, unsigned long long key) {
     if (currentNode->leaf) {
@@ -281,11 +233,11 @@ bool BTree::erase(unsigned long long key) {
     return (erase(root, key, 1)) ? true : false;
 }
 bool BTree::erase(Node* ptr, unsigned long long key, bool del) {
-    if (root == nullptr) return false;
     int index;
     bool exist = binarySearch(ptr->keys, index, key);
     if (ptr->leaf) {
         if (!exist) return false;
+        //del ? delete ptr->keys[index] : free(ptr->keys[index]);
         if (del) delete ptr->keys[index];
         ptr->keys.erase(ptr->keys.begin() + index);
         if (root->keys.size() == 0) {
@@ -373,6 +325,7 @@ bool BTree::erase(Node* ptr, unsigned long long key, bool del) {
 
 Node* BTree::mergeNodes(Node* parent, Node* left, Node* right, int index) {
     left->keys.push_back(parent->keys[index]);
+    //delete parent->keys[index];
     parent->keys.erase(parent->keys.begin() + index);
     std::copy(right->keys.begin(), right->keys.end(), inserter(left->keys, left->keys.end()));
     right->keys.erase(right->keys.begin(), right->keys.end());
@@ -382,6 +335,9 @@ Node* BTree::mergeNodes(Node* parent, Node* left, Node* right, int index) {
     }
     delete right;
     parent->ptrs.erase(parent->ptrs.begin() + index + 1);
+    //right->ptrs.erase(right->ptrs.begin(), right->ptrs.end());
+    //right->keys.erase(right->keys.begin(), right->keys.end());
+    //delete right;
     if (root->keys.size() == 0) {
         parent->ptrs.erase(parent->ptrs.begin());
         delete parent;
@@ -405,18 +361,47 @@ int main()
     srand((unsigned int)time(NULL));
     std::string todo;
     BTree tree; // 63
-    int n = 20;            // 0       1          2          3      4        5         6        7      8       9
+    int n = 20;        // 0       1          2          3      4        5         6        7      8       9
     std::string arr[10] = { "Key", "What", "Abracadabra", "Hmm", "John", "Artur", "Amazing", "Car", "Cow", "Apple" };
     for (unsigned long long i = 1; i < n; i++) {
+        //unsigned long long key = 0;
+        //std::cout << "Enter key" << std::endl;
+        //std::cin >> key;
+        //tree.insert(rand() % (n + 100), arr[i % 10]);
         tree.insert(i, arr[i % 10]);
 
     }
     tree.print();
+    // tree.erase(0);
+    // tree.print();
+    // for (unsigned long long i = 0; i < n; i++) {
+    //     std::cout << i << std::endl;
+    //     tree.erase(i);
+    //     // tree.print();
+    // }
+    // for (unsigned long long i = 0; i < n; i++) {
+    //     todo = tree.search(i);
+    //     if (todo == "NoSuchWord") {
+    //         std::cout << todo << '\n';
+    //     }
+    //     else {
+    //         std::cout << "OK:" << todo << '\n';
+    //     }
+    // }
+
+    //tree.print();
+    ////tree.erase(18);
+    ////tree.print();
+    //tree.erase(18);
+    //tree.erase(19);
+    //tree.print();
+    //tree.erase(20);
+    //tree.print();
     while ((std::cin >> todo)) {
         if (todo == "+") {
             unsigned long long key1;
             std::cin >> key1;
-            std::cout << (tree.insert(key1, "key") ? "OK\n" : "Exist\n");
+            tree.insert(key1, "key");
         }
         else if (todo == "-") {
             unsigned long long key1;
@@ -427,7 +412,6 @@ int main()
             tree.print();
         }
         else if (todo == "e") {
-            tree.clean();
             return 0;
         }
         else {
@@ -437,3 +421,18 @@ int main()
         }
     }
 }
+// - 8
+// OK
+// - 4
+// OK
+// - 1
+// OK
+// - 3
+// OK
+// - 5
+// OK
+// - 7
+// OK
+// - 9
+// OK
+// - 11
